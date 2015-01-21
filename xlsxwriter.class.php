@@ -220,10 +220,36 @@ class XLSXWriter
 
 	protected function writeCell(XLSXWriter_BuffererWriter &$file, $row_number, $column_number, $value, $cell_format)
 	{
-		static $styles = array('money'=>1,'dollar'=>1,'datetime'=>2,'date'=>3,'string'=>0);
+		static $styles = array('money'=>1,'dollar'=>1,'datetime'=>2,'date'=>3,'string'=>0,);
 		$cell = self::xlsCell($row_number, $column_number);
 		$s = isset($styles[$cell_format]) ? $styles[$cell_format] : '0';
 
+		if (is_null($value) || $value === '') {
+			$file->write('<c r="'.$cell.'"/>');
+
+		} elseif ($cell_format=='date') {
+			$file->write('<c r="'.$cell.'" s="'.$s.'" t="n"><v>'.intval(self::convert_date_time($value)).'</v></c>');
+
+		} elseif ($cell_format=='datetime') {
+			$file->write('<c r="'.$cell.'" s="'.$s.'" t="n"><v>'.self::convert_date_time($value).'</v></c>');
+
+		} elseif ($value{0} === '=' && strlen($value) > 1) {
+			$file->write('<c r="'.$cell.'" t="s"><f>'.self::xmlspecialchars($value).'</f></c>');
+
+		} elseif (is_bool($value)) {
+			$file->write('<c r="'.$cell.'" t="s"><v>'.($value ? '1' : '0').'</v></c>');
+
+		} elseif (is_float($value) || is_int($value)) {
+			$file->write('<c r="'.$cell.'"><v>'.$value.'</v></c>');
+
+		} elseif (preg_match('/^\-?([0-9]+\\.?[0-9]*|[0-9]*\\.?[0-9]+)$/', $value)) {
+			$file->write('<c r="'.$cell.'"><v>'.str_replace(',', '.', $value).'</v></c>');
+
+		} else {
+			$file->write('<c r="'.$cell.'" t="s"><v>'.self::xmlspecialchars($this->setSharedString($value)).'</v></c>');
+		}
+
+/*
 		if (!is_scalar($value) || $value=='') { //objects, array, empty
 			$file->write('<c r="'.$cell.'" s="'.$s.'"/>');
 		} elseif ($cell_format=='date') {
@@ -238,7 +264,7 @@ class XLSXWriter
 			$file->write('<c r="'.$cell.'" s="'.$s.'" t="s"><f>'.self::xmlspecialchars($value).'</f></c>');
 		} elseif ($value!==''){
 			$file->write('<c r="'.$cell.'" s="'.$s.'" t="s"><v>'.self::xmlspecialchars($this->setSharedString($value)).'</v></c>');
-		}
+		}*/
 	}
 
 	protected function writeStylesXML()
