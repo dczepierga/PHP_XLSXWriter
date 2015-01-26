@@ -149,7 +149,7 @@ class XLSXWriter
 
 		$sheet->file_writer->write('<row collapsed="false" customFormat="false" customHeight="false" hidden="false" ht="12.1" outlineLevel="0" r="' . (1) . '">');
 		foreach ($header_row as $k => $v) {
-			$this->writeCell($sheet->file_writer, 0, $k, $v, $cell_format = 'string');
+			$this->writeCell($sheet->file_writer, 0, $k, $v);
 		}
 		$sheet->file_writer->write('</row>');
 		$sheet->row_count++;
@@ -163,9 +163,8 @@ class XLSXWriter
 
 		self::initializeSheet($sheet_name);
 		$sheet = &$this->sheets[$sheet_name];
-		if (empty($sheet->cell_formats))
-		{
-			$sheet->cell_formats = array_fill(0, count($row), 'string');
+		if (empty($sheet->cell_formats)) {
+			$sheet->cell_formats = array_fill(0, count($row), FALSE);
 		}
 
 		$sheet->file_writer->write('<row collapsed="false" customFormat="false" customHeight="false" hidden="false" ht="12.1" outlineLevel="0" r="' . ($sheet->row_count + 1) . '">');
@@ -218,53 +217,74 @@ class XLSXWriter
 		$this->finalizeSheet($sheet_name);
 	}
 
-	protected function writeCell(XLSXWriter_BuffererWriter &$file, $row_number, $column_number, $value, $cell_format)
+	protected function writeCell(XLSXWriter_BuffererWriter &$file, $row_number, $column_number, $value, $cell_format = FALSE)
 	{
-		static $styles = array('money'=>1,'dollar'=>1,'datetime'=>2,'date'=>3,'string'=>0,);
 		$cell = self::xlsCell($row_number, $column_number);
-		$s = isset($styles[$cell_format]) ? $styles[$cell_format] : '0';
+		if (is_string($cell_format)) {
+			$cell_format = strtolower($cell_format);
+		}
+		else {
+			$cell_format = FALSE;
+			if (is_null($value) || $value === '') {
+				$cell_format == 'empty';
 
-		if (is_null($value) || $value === '') {
-			$file->write('<c r="'.$cell.'"/>');
+			} elseif (($value{0} === '=' && strlen($value) > 1)) {
+				$cell_format = 'formula';
 
-		} elseif ($cell_format=='date') {
-			$file->write('<c r="'.$cell.'" s="'.$s.'" t="n"><v>'.intval(self::convert_date_time($value)).'</v></c>');
+			} elseif (is_bool($value)) {
+				$cell_format = 'boolean';
 
-		} elseif ($cell_format=='datetime') {
-			$file->write('<c r="'.$cell.'" s="'.$s.'" t="n"><v>'.self::convert_date_time($value).'</v></c>');
+			} elseif (is_float($value) || is_int($value)) {
+				$cell_format = 'numeric';
 
-		} elseif ($value{0} === '=' && strlen($value) > 1) {
-			$file->write('<c r="'.$cell.'" t="s"><f>'.self::xmlspecialchars($value).'</f></c>');
-
-		} elseif (is_bool($value)) {
-			$file->write('<c r="'.$cell.'" t="s"><v>'.($value ? '1' : '0').'</v></c>');
-
-		} elseif (is_float($value) || is_int($value)) {
-			$file->write('<c r="'.$cell.'"><v>'.$value.'</v></c>');
-
-		} elseif (preg_match('/^\-?([0-9]+\\.?[0-9]*|[0-9]*\\.?[0-9]+)$/', $value)) {
-			$file->write('<c r="'.$cell.'"><v>'.str_replace(',', '.', $value).'</v></c>');
-
-		} else {
-			$file->write('<c r="'.$cell.'" t="s"><v>'.self::xmlspecialchars($this->setSharedString($value)).'</v></c>');
+			} else {
+				$number = str_replace(',', '.', str_replace(' ', '', $value));
+				if (is_numeric($number)) {
+					$cell_format = 'numeric';
+				}
+				else {
+					$isDate = strtotime($value);
+					if ($isDate === FALSE) {
+						$cell_format = 'string';
+					}
+					else {
+						$timestamp = self::convert_date_time($value);
+						if (is_int($timestamp)) {
+							$cell_format = 'date';
+						}
+						else {
+							$cell_format = 'datetime';
+						}
+					}
+				}
+			}
 		}
 
-/*
-		if (!is_scalar($value) || $value=='') { //objects, array, empty
-			$file->write('<c r="'.$cell.'" s="'.$s.'"/>');
-		} elseif ($cell_format=='date') {
-			$file->write('<c r="'.$cell.'" s="'.$s.'" t="n"><v>'.intval(self::convert_date_time($value)).'</v></c>');
-		} elseif ($cell_format=='datetime') {
-			$file->write('<c r="'.$cell.'" s="'.$s.'" t="n"><v>'.self::convert_date_time($value).'</v></c>');
-		} elseif (!is_string($value)) {
-			$file->write('<c r="'.$cell.'" s="'.$s.'" t="n"><v>'.($value*1).'</v></c>');//int,float, etc
-		} elseif ($value{0}!='0' && filter_var($value, FILTER_VALIDATE_INT)){ //excel wants to trim leading zeros
-			$file->write('<c r="'.$cell.'" s="'.$s.'" t="n"><v>'.($value).'</v></c>');//numeric string
-		} elseif ($value{0}=='='){
-			$file->write('<c r="'.$cell.'" s="'.$s.'" t="s"><f>'.self::xmlspecialchars($value).'</f></c>');
-		} elseif ($value!==''){
-			$file->write('<c r="'.$cell.'" s="'.$s.'" t="s"><v>'.self::xmlspecialchars($this->setSharedString($value)).'</v></c>');
-		}*/
+		switch ($cell_format) {
+			case 'empty':
+				return $file->write('<c r="'.$cell.'"/>');
+
+			case 'formula':
+				return $file->write('<c r="'.$cell.'" t="s"><f>'.self::xmlspecialchars($value).'</f></c>');
+
+			case 'bool':
+			case 'boolean':
+				return $file->write('<c r="'.$cell.'"><v>'.($value ? '1' : '0').'</v></c>');
+
+			case 'numeric':
+				$number = str_replace(',', '.', str_replace(' ', '', $value));
+				return $file->write('<c r="' . $cell . '"><v>' . floatval($number) . '</v></c>');
+
+			case 'date':
+				return $file->write('<c r="'.$cell.'" s="3" t="n"><v>'.self::convert_date_time($value).'</v></c>');
+
+			case 'datetime':
+				return $file->write('<c r="'.$cell.'" s="2" t="n"><v>'.self::convert_date_time($value).'</v></c>');
+
+			default:
+			case 'string':
+				return $file->write('<c r="'.$cell.'" t="s"><v>'.self::xmlspecialchars($this->setSharedString($value)).'</v></c>');
+		}
 	}
 
 	protected function writeStylesXML()
