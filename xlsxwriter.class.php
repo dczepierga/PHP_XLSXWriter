@@ -243,7 +243,7 @@ class XLSXWriter
 					$cell_format = 'numeric';
 				}
 				else {
-					$isDate = strtotime($value);
+					$isDate = strtotime(trim($value));
 					if ($isDate === FALSE) {
 						$cell_format = 'string';
 					}
