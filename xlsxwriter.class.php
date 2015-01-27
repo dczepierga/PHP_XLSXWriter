@@ -276,9 +276,15 @@ class XLSXWriter
 				return $file->write('<c r="' . $cell . '"><v>' . floatval($number) . '</v></c>');
 
 			case 'date':
+				if (strlen(trim($value)) == 0) {
+					return $file->write('<c r="'.$cell.'"/>');
+				}
 				return $file->write('<c r="'.$cell.'" s="3" t="n"><v>'.self::convert_date_time($value).'</v></c>');
 
 			case 'datetime':
+				if (strlen(trim($value)) == 0) {
+					return $file->write('<c r="'.$cell.'"/>');
+				}
 				return $file->write('<c r="'.$cell.'" s="2" t="n"><v>'.self::convert_date_time($value).'</v></c>');
 
 			default:
